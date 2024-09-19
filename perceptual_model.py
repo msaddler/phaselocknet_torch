@@ -1,8 +1,6 @@
 import collections
-
 import numpy as np
 import torch
-import torchvision
 
 
 class PerceptualModel(torch.nn.Module):
@@ -84,14 +82,19 @@ class PerceptualModel(torch.nn.Module):
         elif "permute" in layer_type:
             layer = Permute(dims=d["args"]["dims"])
         elif "reshape" in layer_type:
+            if "shape" not in d["args"]:
+                assert "target_shape" in d["args"].keys()
+                assert len(d["args"]["target_shape"]) == 3
+                assert d["args"]["target_shape"][-1] == -1
+                d["args"]["shape"] = [
+                    x.shape[0],
+                    d["args"]["target_shape"][2],
+                    d["args"]["target_shape"][0],
+                    d["args"]["target_shape"][1],
+                ]
             layer = Reshape(shape=d["args"]["shape"])
         elif "unsqueeze" in layer_type:
             layer = Unsqueeze(dim=d["args"]["dim"])
-        elif "randomslice" in layer_type.replace("_", ""):
-            layer = RandomSlice(
-                size=d["args"]["size"],
-                buffer=d["args"]["buffer"],
-            )
         elif "relu" in layer_type:
             layer = torch.nn.ReLU(inplace=False)
         elif ("branch" in layer_type) or ("fc_top" in layer_type):
@@ -367,25 +370,3 @@ class Unsqueeze(torch.nn.Module):
     def forward(self, x):
         """ """
         return torch.unsqueeze(x, dim=self.dim)
-
-
-class RandomSlice(torch.nn.Module):
-    def __init__(self, size=[50, 20000], buffer=[0, 0], **kwargs):
-        """ """
-        super().__init__()
-        self.size = size
-        self.pre_crop_slice = []
-        for b in buffer:
-            if b is None:
-                self.pre_crop_slice.append(slice(None))
-            elif isinstance(b, int) and b > 0:
-                self.pre_crop_slice.append(slice(b, -b))
-            elif isinstance(b, int) and b == 0:
-                self.pre_crop_slice.append(slice(None))
-            elif isinstance(b, (tuple, list)):
-                self.pre_crop_slice.append(slice(*b))
-        self.crop = torchvision.transforms.RandomCrop(size=self.size, **kwargs)
-
-    def forward(self, x):
-        """ """
-        return self.crop(x[..., *self.pre_crop_slice])
