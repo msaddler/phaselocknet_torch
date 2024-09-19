@@ -24,10 +24,9 @@ class PeripheralModel(torch.nn.Module):
         self.sr_output = sr_input if sr_output is None else sr_output
         self.body = collections.OrderedDict()
         # Bandpass filterbank determines cochlear frequency tuning
-        filterbank_mode = config_cochlear_filterbank.get("mode", "").lower()
-        if filterbank_mode == "":
-            self.body["cochlear_filterbank"] = torch.nn.Identity()
-        elif filterbank_mode == "fir_gammatone_filterbank":
+        if config_cochlear_filterbank:
+            msg = "Cochlear filterbank mode must be `fir_gammatone`"
+            assert "fir_gammatone" in config_cochlear_filterbank["mode"], msg
             if config_cochlear_filterbank.get("cfs", False):
                 cfs = np.array(config_cochlear_filterbank["cfs"])
             else:
@@ -43,7 +42,7 @@ class PeripheralModel(torch.nn.Module):
                 **config_cochlear_filterbank.get("kwargs_filter_coefs", {}),
             )
         else:
-            raise NotImplementedError(f"{filterbank_mode=} is not implemented")
+            self.body["cochlear_filterbank"] = torch.nn.Identity()
         # IHC transduction (includes compression and half-wave rectification)
         if config_ihc_transduction:
             self.body["ihc_transduction"] = IHCTransduction(
