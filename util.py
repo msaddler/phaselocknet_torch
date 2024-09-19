@@ -1,9 +1,11 @@
 import glob
 import json
-import h5py
 import os
+import re
 import resource
 import time
+
+import h5py
 import numpy as np
 import torch
 

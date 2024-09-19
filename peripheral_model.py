@@ -1,4 +1,5 @@
 import collections
+
 import numpy as np
 import scipy.signal
 import torch
@@ -120,60 +121,44 @@ def erbspace(freq_min, freq_max, num):
     return erb2freq(np.linspace(freq2erb(freq_min), freq2erb(freq_max), num=num))
 
 
-def get_gammatone_filter_coefs(sr,
-                               cfs,
-                               EarQ=9.2644,
-                               minBW=24.7,
-                               order=1):
+def get_gammatone_filter_coefs(sr, cfs, EarQ=9.2644, minBW=24.7, order=1):
     """
     Based on `MakeERBFilters.m` and `ERBFilterBank.m`
     from Malcolm Slaney's Auditory Toolbox (1998).
     """
     T = 1 / sr
-    ERB = ((cfs / EarQ) ** order + minBW ** order) ** (1/order)
+    ERB = ((cfs / EarQ) ** order + minBW**order) ** (1 / order)
     B = 1.019 * 2 * np.pi * ERB
     A0 = T * np.ones_like(cfs)
     A2 = 0 * np.ones_like(cfs)
     B0 = 1 * np.ones_like(cfs)
     B1 = -2 * np.cos(2 * cfs * np.pi * T) / np.exp(B * T)
     B2 = np.exp(-2 * B * T)
-    
+
     tmp0 = 2 * T * np.cos(2 * cfs * np.pi * T) / np.exp(B * T)
     tmp1 = T * np.sin(2 * cfs * np.pi * T) / np.exp(B * T)
-    A11 = -(tmp0 + 2 * np.sqrt(3 + 2 ** 1.5) * tmp1) / 2;
-    A12 = -(tmp0 - 2 * np.sqrt(3 + 2 ** 1.5) * tmp1) / 2;
-    A13 = -(tmp0 + 2 * np.sqrt(3 - 2 ** 1.5) * tmp1) / 2;
-    A14 = -(tmp0 - 2 * np.sqrt(3 - 2 ** 1.5) * tmp1) / 2;
+    A11 = -(tmp0 + 2 * np.sqrt(3 + 2**1.5) * tmp1) / 2
+    A12 = -(tmp0 - 2 * np.sqrt(3 + 2**1.5) * tmp1) / 2
+    A13 = -(tmp0 + 2 * np.sqrt(3 - 2**1.5) * tmp1) / 2
+    A14 = -(tmp0 - 2 * np.sqrt(3 - 2**1.5) * tmp1) / 2
 
     tmp2 = np.exp(4 * 1j * cfs * np.pi * T)
     tmp3 = 2 * np.exp(-(B * T) + 2 * 1j * cfs * np.pi * T) * T
     tmp4 = np.cos(2 * cfs * np.pi * T)
     tmp5 = np.sin(2 * cfs * np.pi * T)
     gain = np.abs(
-        (-2 * tmp2 * T + tmp3 * (tmp4 - np.sqrt(3 - 2 ** (3 / 2)) * tmp5)) * \
-        (-2 * tmp2 * T + tmp3 * (tmp4 + np.sqrt(3 - 2 ** (3 / 2)) * tmp5)) * \
-        (-2 * tmp2 * T + tmp3 * (tmp4 - np.sqrt(3 + 2 ** (3 / 2)) * tmp5)) * \
-        (-2 * tmp2 * T + tmp3 * (tmp4 + np.sqrt(3 + 2 ** (3 / 2)) * tmp5)) / \
-        (-2 / np.exp(2 * B * T) - 2 * tmp2 + 2 * (1 + tmp2) / np.exp(B * T)) ** 4
+        (-2 * tmp2 * T + tmp3 * (tmp4 - np.sqrt(3 - 2 ** (3 / 2)) * tmp5))
+        * (-2 * tmp2 * T + tmp3 * (tmp4 + np.sqrt(3 - 2 ** (3 / 2)) * tmp5))
+        * (-2 * tmp2 * T + tmp3 * (tmp4 - np.sqrt(3 + 2 ** (3 / 2)) * tmp5))
+        * (-2 * tmp2 * T + tmp3 * (tmp4 + np.sqrt(3 + 2 ** (3 / 2)) * tmp5))
+        / (-2 / np.exp(2 * B * T) - 2 * tmp2 + 2 * (1 + tmp2) / np.exp(B * T)) ** 4
     )
-    
+
     filter_coefs = [
-        {
-            'b': np.array([A0, A11, A2]) / gain,
-            'a': np.array([B0, B1, B2])
-        },
-        {
-            'b': np.array([A0, A12, A2]),
-            'a': np.array([B0, B1, B2])
-        },
-        {
-            'b': np.array([A0, A13, A2]),
-            'a': np.array([B0, B1, B2])
-        },
-        {
-            'b': np.array([A0, A14, A2]),
-            'a': np.array([B0, B1, B2])
-        },
+        {"b": np.array([A0, A11, A2]) / gain, "a": np.array([B0, B1, B2])},
+        {"b": np.array([A0, A12, A2]), "a": np.array([B0, B1, B2])},
+        {"b": np.array([A0, A13, A2]), "a": np.array([B0, B1, B2])},
+        {"b": np.array([A0, A14, A2]), "a": np.array([B0, B1, B2])},
     ]
     return filter_coefs
 
@@ -190,36 +175,28 @@ def scipy_gammatone_filterbank(x, filter_coefs):
         x_subbands = x[:, np.newaxis, :]
     else:
         raise ValueError("Expected input shape [time] or [batch, time]")
-    n_subbands = filter_coefs[0]['b'].shape[-1]
+    n_subbands = filter_coefs[0]["b"].shape[-1]
     x_subbands = np.tile(x_subbands, [1, n_subbands, 1])
     for fc in filter_coefs:
         for itr_subbands in range(n_subbands):
             x_subbands[:, itr_subbands, :] = scipy.signal.lfilter(
-                fc['b'][:, itr_subbands],
-                fc['a'][:, itr_subbands],
+                fc["b"][:, itr_subbands],
+                fc["a"][:, itr_subbands],
                 x_subbands[:, itr_subbands, :],
-                axis=-1)
+                axis=-1,
+            )
     if len(x.shape) == 1:
         x_subbands = x_subbands[0]
     return x_subbands
 
 
-def get_gammatone_impulse_responses(sr,
-                                    fir_dur,
-                                    cfs,
-                                    EarQ=9.2644,
-                                    minBW=24.7,
-                                    order=1):
-    """
-    """
+def get_gammatone_impulse_responses(sr, fir_dur, cfs, EarQ=9.2644, minBW=24.7, order=1):
+    """ """
     impulse = np.zeros(int(fir_dur * sr))
     impulse[0] = 1
     filter_coefs = get_gammatone_filter_coefs(
-        sr,
-        cfs,
-        EarQ=EarQ,
-        minBW=minBW,
-        order=order)
+        sr, cfs, EarQ=EarQ, minBW=minBW, order=order
+    )
     impulse_responses = scipy_gammatone_filterbank(impulse, filter_coefs)
     return impulse_responses
 
@@ -298,7 +275,7 @@ class FIRFilterbank(torch.nn.Module):
         """
         y = x
         if batching:
-            util_filters._batching_check(y, self.fir)
+            assert y.shape[-2] == self.fir.shape[0]
         else:
             y = y.unsqueeze(-2)
         unflatten_shape = y.shape[:-2]
