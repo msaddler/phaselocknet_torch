@@ -1,143 +1,54 @@
 import glob
 import json
+import h5py
 import os
 import resource
 import time
-
 import numpy as np
-import pandas as pd
-import scipy
+import torch
 
 
-def logistic_function(x, x0, k, chance=0.5):
-    """ """
-    return ((1 - chance) / (1 + np.exp(-k * (x - x0)))) + chance
+class NumpyEncoder(json.JSONEncoder):
+    """
+    Helper class to JSON serialize numpy arrays.
+    """
+
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        return json.JSONEncoder.default(self, obj)
 
 
-def logistic_function_inv(y, x0, k, chance=0.5):
-    """ """
-    return (np.log(((1 - chance) / (y - chance)) - 1) / -k) + x0
+def get_hdf5_dataset_key_list(f_input):
+    """
+    Walks hdf5 file and returns list of all dataset keys.
 
+    Args
+    ----
+    f_input (str or h5py.File): hdf5 filename or file object
 
-def fit_logistic_function(x, y, method="trf", chance=0.5, p0=None, **kwargs):
-    """ """
-    if p0 is None:
-        p0 = (x[np.argmin(np.abs(np.cumsum(y) / np.sum(y) - chance))], 1)
-    popt, pcov = scipy.optimize.curve_fit(
-        lambda _, x0, k: logistic_function(_, x0, k, chance=chance),
-        xdata=x,
-        ydata=y,
-        p0=p0,
-        method=method,
-        **kwargs,
-    )
-    return np.squeeze(popt), np.squeeze(pcov)
+    Returns
+    -------
+    hdf5_dataset_key_list (list): list of paths to datasets in f_input
+    """
+    if isinstance(f_input, str):
+        f = h5py.File(f_input, "r")
+    else:
+        f = f_input
+    hdf5_dataset_key_list = []
 
+    def get_dataset_keys(name, node):
+        if isinstance(node, h5py.Dataset):
+            hdf5_dataset_key_list.append(name)
 
-class PsychoacousticExperiment:
-    def __init__(
-        self,
-        read=True,
-        write=True,
-        overwrite=False,
-        verbose=False,
-        **kwargs,
-    ):
-        """
-        Base class for running a psychoacoustic experiment on a
-        model (converts evaluation output file to a results file)
-        """
-        self.read = read
-        self.write = write
-        self.overwrite = overwrite
-        self.verbose = verbose
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-    def __call__(self, regex_dir_model):
-        """ """
-        for key in ["basename_eval", "basename_results", "run"]:
-            msg = f"experiment subclass is missing attribute: {key}"
-            assert hasattr(self, key), msg
-        if isinstance(regex_dir_model, list):
-            list_dir_model = regex_dir_model
-        elif isinstance(regex_dir_model, str):
-            list_dir_model = glob.glob(regex_dir_model)
-        else:
-            raise ValueError(f"unrecognized format: {regex_dir_model=}")
-        list_df = []
-        for dir_model in list_dir_model:
-            fn_eval = os.path.join(dir_model, self.basename_eval)
-            fn_results = os.path.join(dir_model, self.basename_results)
-            df = None
-            if self.read:
-                if (os.path.exists(fn_results)) and (not self.overwrite):
-                    df = pd.read_csv(fn_results)
-                    if self.verbose:
-                        print(f"[experiment] READ {fn_results=}")
-            if df is None:
-                df = self.run(fn_eval)
-                if self.verbose:
-                    print(f"[experiment] READ {fn_eval=}")
-            if self.write:
-                if (not os.path.exists(fn_results)) or (self.overwrite):
-                    df.to_csv(fn_results, index=False)
-                    if self.verbose:
-                        print(f"[experiment] WROTE {fn_results=}")
-            list_df.append(df.assign(dir_model=dir_model, fn_eval=fn_eval))
-        return pd.concat(list_df)
-
-    def __repr__(self):
-        """ """
-        d = {
-            a: getattr(self, a)
-            for a in dir(self)
-            if (not a.startswith("__")) and (isinstance(getattr(self, a), str))
-        }
-        return json.dumps(d)
-
-
-class ExperimentHeinz2001FrequencyDiscrimination(PsychoacousticExperiment):
-    def __init__(
-        self,
-        basename_eval="eval.csv",
-        basename_results="results.csv",
-        **kwargs,
-    ):
-        """
-        PsychoacousticExperiment class for pure tone frequency discrimination
-        experiment from Heinz et al. (2001, Neural Computation)
-        """
-        super().__init__(
-            basename_eval=basename_eval,
-            basename_results=basename_results,
-            **kwargs,
-        )
-
-    def octave_to_weber_fraction(self, interval):
-        """ """
-        return np.power(2, interval) - 1.0
-
-    def run(self, fn_eval):
-        """ """
-        df = pd.concat([pd.read_csv(_) for _ in glob.glob(fn_eval)])
-        df["correct"] = df["label"] == (df["logits"] > 0)
-        df["interval"] = np.abs(df["interval"])
-        df = df.groupby(["f0", "interval"]).agg({"correct": "mean"}).reset_index()
-        df = df.sort_values(by=["f0", "interval"])
-        df = df.groupby(["f0"]).agg({"interval": list, "correct": list}).reset_index()
-        kw = {"method": "dogbox", "max_nfev": 10000}
-        df["popt"] = df.apply(
-            lambda _: fit_logistic_function(np.log(_["interval"]), _["correct"], **kw)[
-                0
-            ],
-            axis=1,
-        )
-        df["log_threshold"] = df["popt"].map(lambda _: logistic_function_inv(0.75, *_))
-        df["threshold"] = np.exp(df["log_threshold"])
-        df["weber_fraction"] = self.octave_to_weber_fraction(df["threshold"])
-        df = df.drop(columns=["interval", "correct", "popt"])
-        return df
+    f.visititems(get_dataset_keys)
+    if isinstance(f_input, str):
+        f.close()
+    return hdf5_dataset_key_list
 
 
 def get_model_progress_display_str(
@@ -206,72 +117,161 @@ def get_model_progress_display_str(
     return display_str
 
 
-def format_axes(
-    ax,
-    str_title=None,
-    str_xlabel=None,
-    str_ylabel=None,
-    fontsize_title=12,
-    fontsize_labels=12,
-    fontsize_ticks=12,
-    fontweight_title=None,
-    fontweight_labels=None,
-    xscale="linear",
-    yscale="linear",
-    xlimits=None,
-    ylimits=None,
-    xticks=None,
-    yticks=None,
-    xticks_minor=None,
-    yticks_minor=None,
-    xticklabels=None,
-    yticklabels=None,
-    spines_to_hide=[],
-    major_tick_params_kwargs_update={},
-    minor_tick_params_kwargs_update={},
+def rms(x, dim=None, keepdim=False):
+    """
+    Compute root-mean-squared amplitude of `x` along axis `dim`
+    """
+    out = torch.sqrt(
+        torch.mean(
+            torch.square(x),
+            dim=dim,
+            keepdim=keepdim,
+        ),
+    )
+    return out
+
+
+def set_dbspl(x, dbspl, mean_subtract=True, dim=None, keepdim=False):
+    """
+    Set root-mean-squared amplitude of `x` along axis `dim`
+    to the sound pressure level `dbspl` (in dB re 20e-6 Pa)
+    """
+    if mean_subtract:
+        x = x - torch.mean(x, dim=dim, keepdim=keepdim)
+    rms_output = 20e-6 * torch.pow(10, dbspl / 20)
+    rms_input = rms(x, dim=dim, keepdim=keepdim)
+    if torch.is_nonzero(rms_input):
+        x = rms_output * (x / rms_input)
+    return x
+
+
+def pad_or_trim_to_len(x, n, dim=-1, kwargs_pad={}):
+    """
+    Symmetrically pad or trim `x` to length `n` along axis `dim`
+    """
+    n_orig = int(x.shape[dim])
+    if n_orig < n:
+        n0 = (n - n_orig) // 2
+        n1 = (n - n_orig) - n0
+        pad = []
+        for _ in range(x.ndim):
+            pad.extend([n0, n1] if _ == dim else [0, 0])
+        x = torch.nn.functional.pad(x, pad, **kwargs_pad)
+    if n_orig > n:
+        n0 = (n_orig - n) // 2
+        ind = [slice(None)] * x.ndim
+        ind[dim] = slice(n0, n0 + n)
+        x = x[ind]
+    return x
+
+
+def save_model_checkpoint(
+    model,
+    dir_model=None,
+    step=None,
+    fn_ckpt="ckpt_BEST.pt",
+    fn_ckpt_step="ckpt_{:04d}.pt",
+    **kwargs,
 ):
-    """
-    Helper function for setting axes-related formatting parameters.
-    """
-    ax.set_title(str_title, fontsize=fontsize_title, fontweight=fontweight_title)
-    ax.set_xlabel(str_xlabel, fontsize=fontsize_labels, fontweight=fontweight_labels)
-    ax.set_ylabel(str_ylabel, fontsize=fontsize_labels, fontweight=fontweight_labels)
-    ax.set_xscale(xscale)
-    ax.set_yscale(yscale)
-    ax.set_xlim(xlimits)
-    ax.set_ylim(ylimits)
-    if xticks_minor is not None:
-        ax.set_xticks(xticks_minor, minor=True)
-    if yticks_minor is not None:
-        ax.set_yticks(yticks_minor, minor=True)
-    if xticks is not None:
-        ax.set_xticks(xticks, minor=False)
-    if yticks is not None:
-        ax.set_yticks(yticks, minor=False)
-    if xticklabels is not None:
-        ax.set_xticklabels([], minor=True)
-        ax.set_xticklabels(xticklabels, minor=False)
-    if yticklabels is not None:
-        ax.set_yticklabels([], minor=True)
-        ax.set_yticklabels(yticklabels, minor=False)
-    major_tick_params_kwargs = {
-        "axis": "both",
-        "which": "major",
-        "labelsize": fontsize_ticks,
-        "length": fontsize_ticks / 2,
-        "direction": "out",
-    }
-    major_tick_params_kwargs.update(major_tick_params_kwargs_update)
-    ax.tick_params(**major_tick_params_kwargs)
-    minor_tick_params_kwargs = {
-        "axis": "both",
-        "which": "minor",
-        "labelsize": fontsize_ticks,
-        "length": fontsize_ticks / 4,
-        "direction": "out",
-    }
-    minor_tick_params_kwargs.update(minor_tick_params_kwargs_update)
-    ax.tick_params(**minor_tick_params_kwargs)
-    for spine_key in spines_to_hide:
-        ax.spines[spine_key].set_visible(False)
-    return ax
+    """ """
+    filename = fn_ckpt
+    if step is not None:
+        filename = fn_ckpt_step.format(step)
+    if dir_model is not None:
+        filename = os.path.join(dir_model, filename)
+    torch.save(model.state_dict(), filename + "~", **kwargs)
+    os.rename(filename + "~", filename)
+    print(f"[save_model_checkpoint] {filename}")
+    return filename
+
+
+def load_model_checkpoint(
+    model,
+    dir_model=None,
+    step=None,
+    fn_ckpt="ckpt_BEST.pt",
+    fn_ckpt_step="ckpt_{:04d}.pt",
+    **kwargs,
+):
+    """ """
+    filename = fn_ckpt
+    if step is not None:
+        filename = fn_ckpt_step
+    if dir_model is not None:
+        filename = os.path.join(dir_model, filename)
+    if (step is not None) and (step >= 0):
+        # Load checkpoint specified by step
+        filename = filename.format(step)
+    elif step is not None:
+        # Load recent checkpoint if step < 0
+        unformatted = filename.replace(
+            filename[filename.find("{") + 1 : filename.find("}")],
+            "",
+        )
+        list_filename = []
+        list_step = []
+        for filename in glob.glob(unformatted.format("*")):
+            output = re.findall(r"\d+", os.path.basename(filename))
+            if len(output) == 1:
+                list_filename.append(filename)
+                list_step.append(int(output[0]))
+        if len(list_filename) == 0:
+            print("[load_model_checkpoint] No prior checkpoint found")
+            return 0
+        list_filename = [list_filename[_] for _ in np.argsort(list_step)]
+        filename = list_filename[step]
+    state_dict = torch.load(filename, **kwargs)
+    model.load_state_dict(state_dict, strict=True, assign=False)
+    print(f"[load_model_checkpoint] {filename}")
+    if (step is not None) and (step < 0):
+        return list_step[step]
+    return filename
+
+
+def set_trainable(
+    model,
+    trainable=False,
+    trainable_layers=None,
+    trainable_batchnorm=None,
+    verbose=True,
+):
+    """ """
+    if not trainable:
+        model.train(trainable)
+        trainable_params = []
+    elif trainable_layers is None:
+        model.train(trainable)
+        trainable_params = list(model.parameters())
+    else:
+        trainable_layers_names = []
+        trainable_params_names = []
+        trainable_params = []
+        model.train(False)
+        if verbose:
+            print(f"[set_trainable] {trainable_layers=}")
+        for m_name, m in model.named_modules():
+            msg = f"invalid trainable_layers ({m_name} -> multiple matches)"
+            for pattern in trainable_layers:
+                if pattern in m_name:
+                    assert m_name not in trainable_layers_names, msg
+                    trainable_layers_names.append(m_name)
+                    m.train(trainable)
+                    if verbose:
+                        print(f"{m_name} ('{pattern}') -> {m.training}")
+                    for p_basename, p in m.named_parameters():
+                        p_name = f"{m_name}.{p_basename}"
+                        assert p_name not in trainable_params_names, msg
+                        trainable_params_names.append(p_name)
+                        trainable_params.append(p)
+                        if verbose:
+                            print(f"|__ {p_name} {p.shape}")
+            if trainable_batchnorm is not None:
+                if "batchnorm" in str(type(m)).lower():
+                    m.train(trainable_batchnorm)
+                    if verbose:
+                        print(f"{m_name} ({trainable_batchnorm=}) -> {m.training}")
+        if verbose:
+            print(f"[set_trainable] {len(trainable_layers_names)=}")
+    if verbose:
+        print(f"[set_trainable] {trainable} -> {len(trainable_params)=}")
+    return trainable_params
