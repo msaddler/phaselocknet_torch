@@ -53,6 +53,47 @@ def get_hdf5_dataset_key_list(f_input):
     return hdf5_dataset_key_list
 
 
+class HDF5Dataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        regex_filenames,
+        keys=None,
+    ):
+        """ """
+        super().__init__()
+        self.filenames = list(glob.glob(regex_filenames))
+        self.files = [h5py.File(_, "r") for _ in self.filenames]
+        self.keys = keys
+        if self.keys is None:
+            self.keys = get_hdf5_dataset_key_list(self.files[0])
+            self.keys = [
+                key
+                for key in self.keys
+                if np.issubdtype(self.files[0][key].dtype, np.number)
+            ]
+        n = [self.files[0][key].shape[0] for key in self.keys]
+        assert len(np.unique(n)) == 1, "dataset keys must have same length"
+        self.n_per_file = [f[self.keys[0]].shape[0] for f in self.files]
+        self.index_map = []
+        for index_file in range(len(self.files)):
+            for index_data in range(self.n_per_file[index_file]):
+                self.index_map.append((index_file, index_data))
+
+    def __getitem__(self, index):
+        """ """
+        index_file, index_data = self.index_map[index]
+        return {key: self.files[index_file][key][index_data] for key in self.keys}
+
+    def __len__(self):
+        """ """
+        return len(self.index_map)
+
+    def __del__(self):
+        """ """
+        for f in self.files:
+            f.close()
+
+
 def get_model_progress_display_str(
     epoch=None,
     step=None,

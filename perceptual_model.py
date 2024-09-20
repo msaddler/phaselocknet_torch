@@ -81,18 +81,6 @@ class PerceptualModel(torch.nn.Module):
             )
         elif "permute" in layer_type:
             layer = Permute(dims=d["args"]["dims"])
-        elif "reshape" in layer_type:
-            if "shape" not in d["args"]:
-                assert "target_shape" in d["args"].keys()
-                assert len(d["args"]["target_shape"]) == 3
-                assert d["args"]["target_shape"][-1] == -1
-                d["args"]["shape"] = [
-                    x.shape[0],
-                    d["args"]["target_shape"][2],
-                    d["args"]["target_shape"][0],
-                    d["args"]["target_shape"][1],
-                ]
-            layer = Reshape(shape=d["args"]["shape"])
         elif "unsqueeze" in layer_type:
             layer = Unsqueeze(dim=d["args"]["dim"])
         elif "relu" in layer_type:
@@ -100,7 +88,8 @@ class PerceptualModel(torch.nn.Module):
         elif ("branch" in layer_type) or ("fc_top" in layer_type):
             layer = None
         else:
-            raise ValueError(f"{layer_type=} not recognized")
+            print(f"[WARNING] {layer_type=} --> torch.nn.Identity")
+            layer = torch.nn.Identity()
         return layer
 
     def construct_model(self, architecture):
@@ -348,17 +337,6 @@ class Permute(torch.nn.Module):
     def forward(self, x):
         """ """
         return torch.permute(x, dims=self.dims)
-
-
-class Reshape(torch.nn.Module):
-    def __init__(self, shape=None):
-        """ """
-        super().__init__()
-        self.shape = shape
-
-    def forward(self, x):
-        """ """
-        return torch.reshape(x, shape=self.shape)
 
 
 class Unsqueeze(torch.nn.Module):
