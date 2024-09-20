@@ -193,7 +193,17 @@ def load_tf_model_checkpoint(model, filename):
     for k, v in sorted(tf_state_dict.items()):
         layer_index = int(k[k.find("-") + 1 : k.find("/")])
         layer_name = list_layer_name[layer_index]
-        name = "{}.{}".format(layer_name, "bias" if "/b" in k else "weight")
+        if ("/kernel" in k) or ("/gamma" in k):
+            name = "weight"
+        elif ("/bias" in k) or ("/beta" in k):
+            name = "bias"
+        elif "/moving_variance" in k:
+            name = "running_var"
+        elif "/moving_mean" in k:
+            name = "running_mean"
+        else:
+            raise ValueError(f"Unrecognized tensorflow parameter: `{k}`")
+        name = "{}.{}".format(layer_name, name)
         if v.ndim == 2:
             torch_state_dict[name] = torch.tensor(np.transpose(v, [1, 0]))
         elif v.ndim == 4:
@@ -209,9 +219,10 @@ def load_tf_model_checkpoint(model, filename):
     # Load parameters into torch model
     out = model.load_state_dict(torch_state_dict, strict=False, assign=False)
     assert not out.unexpected_keys, out
-    print("[missing_keys] (should only include non-trainable parameters)")
-    for k in out.missing_keys:
-        print(f"|__ {k}")
+    if out.missing_keys:
+        print(f"[load_tf_model_checkpoint] missing_keys ({filename})")
+        for k in out.missing_keys:
+            print(f"|__ {k}")
     print(f"[load_tf_model_checkpoint] {filename}")
     return filename
 
