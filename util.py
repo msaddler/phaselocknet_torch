@@ -167,6 +167,55 @@ def pad_or_trim_to_len(x, n, dim=-1, kwargs_pad={}):
     return x
 
 
+def load_tf_model_checkpoint(model, filename):
+    """
+    Load parameters from a tensorflow checkpoint file into a torch model
+    (includes only learned parameters; excludes optimizer hyperparameters)
+    """
+    import tensorflow.train
+
+    # Get list of layers with named parameters from torch model
+    list_layer_name = []
+    for n, p in model.named_parameters():
+        name = n.replace(".bias", "").replace(".weight", "")
+        if name not in list_layer_name:
+            list_layer_name.append(name)
+    # Read the tensorflow checkpoint file into `tf_state_dict`
+    tf_state_dict = {}
+    reader = tensorflow.train.load_checkpoint(filename)
+    for k in reader.get_variable_to_shape_map():
+        if ("layer_with_weights" in k) and ("OPTIMIZER_SLOT" not in k):
+            tf_state_dict[
+                k.replace("/.ATTRIBUTES/VARIABLE_VALUE", "")
+            ] = reader.get_tensor(k)
+    # Map parameters from `tf_state_dict` to `torch_state_dict`
+    torch_state_dict = {}
+    for k, v in sorted(tf_state_dict.items()):
+        layer_index = int(k[k.find("-") + 1 : k.find("/")])
+        layer_name = list_layer_name[layer_index]
+        name = "{}.{}".format(layer_name, "bias" if "/b" in k else "weight")
+        if v.ndim == 2:
+            torch_state_dict[name] = torch.tensor(np.transpose(v, [1, 0]))
+        elif v.ndim == 4:
+            torch_state_dict[name] = torch.tensor(np.transpose(v, [3, 2, 0, 1]))
+        else:
+            torch_state_dict[name] = torch.tensor(v)
+    # Ensure all torch model parameters are accounted for and shapes align
+    for n, p in model.named_parameters():
+        msg0 = f"torch model parameter `{n}` not found in checkpoint"
+        msg1 = f"shape mismatch for `{n}`: {p.shape} | {torch_state_dict[n].shape}"
+        assert n in torch_state_dict, msg0
+        assert np.array_equal(torch_state_dict[n].shape, p.shape), msg1
+    # Load parameters into torch model
+    out = model.load_state_dict(torch_state_dict, strict=False, assign=False)
+    assert not out.unexpected_keys, out
+    print("[missing_keys] (should only include non-trainable parameters)")
+    for k in out.missing_keys:
+        print(f"|__ {k}")
+    print(f"[load_tf_model_checkpoint] {filename}")
+    return filename
+
+
 def save_model_checkpoint(
     model,
     dir_model=None,

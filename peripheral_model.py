@@ -18,7 +18,9 @@ class PeripheralModel(torch.nn.Module):
         config_anf_spike_generator={},
         config_random_slice={},
     ):
-        """ """
+        """
+        Construct torch peripheral auditory model from config dictionaries
+        """
         super().__init__()
         self.sr_input = sr_input
         self.sr_output = sr_input if sr_output is None else sr_output

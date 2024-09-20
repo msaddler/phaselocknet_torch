@@ -10,7 +10,6 @@ class PerceptualModel(torch.nn.Module):
         architecture=[],
         input_shape=[2, 6, 50, 20000],
         heads={"label": 1},
-        device=None,
     ):
         """
         Construct torch DNN model graph from architecture description
@@ -20,7 +19,7 @@ class PerceptualModel(torch.nn.Module):
         self.body = collections.OrderedDict()
         self.heads = heads
         self.head = {k: collections.OrderedDict() for k in self.heads}
-        self.construct_model(architecture, device)
+        self.construct_model(architecture)
 
     def get_layer_from_description(self, d, x):
         """ """
@@ -104,9 +103,9 @@ class PerceptualModel(torch.nn.Module):
             raise ValueError(f"{layer_type=} not recognized")
         return layer
 
-    def construct_model(self, architecture, device):
+    def construct_model(self, architecture):
         """ """
-        x = torch.zeros(self.input_shape).to(device)
+        x = torch.zeros(self.input_shape)
         is_body_layer = True
         for d in architecture:
             if is_body_layer:
@@ -124,11 +123,11 @@ class PerceptualModel(torch.nn.Module):
             else:
                 if is_body_layer:
                     self.body[d["args"]["name"]] = layer
-                    x = layer.to(x.device)(x)
+                    x = layer(x)
                 else:
                     for k in self.heads:
                         self.head[k][d["args"]["name"]] = layer[k]
-                        x[k] = layer[k].to(x[k].device)(x[k])
+                        x[k] = layer[k](x[k])
         self.body = torch.nn.Sequential(self.body)
         if not isinstance(x, dict):
             x = {k: torch.clone(x) for k in self.heads}
