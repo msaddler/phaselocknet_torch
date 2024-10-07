@@ -83,6 +83,8 @@ class PerceptualModel(torch.nn.Module):
             layer = Permute(dims=d["args"]["dims"])
         elif "unsqueeze" in layer_type:
             layer = Unsqueeze(dim=d["args"]["dim"])
+        elif "expandlastdimension" in layer_type:
+            layer = ExpandLastDimension(num_dims=d["args"]["num_dims"])
         elif "relu" in layer_type:
             layer = torch.nn.ReLU(inplace=False)
         elif ("branch" in layer_type) or ("fc_top" in layer_type):
@@ -332,7 +334,7 @@ class Permute(torch.nn.Module):
     def __init__(self, dims=None):
         """ """
         super().__init__()
-        self.dims = dims
+        self.dims = [0] + list(dims)
 
     def forward(self, x):
         """ """
@@ -348,3 +350,16 @@ class Unsqueeze(torch.nn.Module):
     def forward(self, x):
         """ """
         return torch.unsqueeze(x, dim=self.dim)
+
+
+class ExpandLastDimension(torch.nn.Module):
+    def __init__(self, num_dims=None):
+        """ """
+        super().__init__()
+        self.num_dims = num_dims
+
+    def forward(self, x):
+        """ """
+        shape = list(x.shape)
+        shape = shape + [1] * (self.num_dims - len(shape))
+        return x.view(shape)
