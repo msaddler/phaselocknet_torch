@@ -78,10 +78,14 @@ class PeripheralModel(torch.nn.Module):
         """ """
         if x.shape[-1] == 2:
             assert x.ndim in [3, 5], "expected binaural audio or nervegram input"
-            y = torch.concat(
-                [self.body(x[..., 0]), self.body(x[..., 1])],
-                axis=1,
-            )
+            y0 = self.body(x[..., 0])
+            y1 = self.body(x[..., 1])
+            if y0.ndim == 4:
+                # Concatenate peripheral auditory representations along axis 1
+                y = torch.concat([y0, y1], axis=1)
+            else:
+                # If output is audio, preserve format by stacking along axis -1
+                y = torch.stack([y0, y1], axis=-1)
         else:
             y = self.body(x)
         y = self.head(y)

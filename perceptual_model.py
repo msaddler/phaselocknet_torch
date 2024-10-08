@@ -1,7 +1,10 @@
 import collections
 
 import numpy as np
+import scipy.signal
 import torch
+
+import peripheral_model
 
 
 class PerceptualModel(torch.nn.Module):
@@ -85,6 +88,12 @@ class PerceptualModel(torch.nn.Module):
             layer = Unsqueeze(dim=d["args"]["dim"])
         elif "expandlastdimension" in layer_type:
             layer = ExpandLastDimension(num_dims=d["args"]["num_dims"])
+        elif "resample" in layer_type:
+            layer = FIRResample(
+                sr_input=d["args"]["sr_input"],
+                sr_output=d["args"]["sr_output"],
+                **d["args"]["kwargs_fir_lowpass_filter"],
+            )
         elif "relu" in layer_type:
             layer = torch.nn.ReLU(inplace=False)
         elif ("branch" in layer_type) or ("fc_top" in layer_type):
@@ -363,3 +372,35 @@ class ExpandLastDimension(torch.nn.Module):
         shape = list(x.shape)
         shape = shape + [1] * (self.num_dims - len(shape))
         return x.view(shape)
+
+
+class FIRResample(peripheral_model.FIRFilterbank):
+    def __init__(
+        self,
+        sr_input=20e3,
+        sr_output=10e3,
+        fir_dur=0.05,
+        cutoff=None,
+        window=("kaiser", 5.0),
+        dtype=torch.float32,
+    ):
+        """ """
+        assert sr_output <= sr_input, f"{sr_output=} > {sr_input=}"
+        numtaps = int(sr_input * fir_dur)
+        if numtaps % 2 == 0:
+            numtaps = numtaps + 1
+        if cutoff is None:
+            cutoff = sr_output / 2
+        fir = scipy.signal.firwin(
+            numtaps=numtaps,
+            cutoff=cutoff,
+            width=None,
+            window=tuple(window),
+            pass_zero=True,
+            scale=True,
+            fs=sr_input,
+        )
+        stride = int(sr_input / sr_output)
+        msg = f"{sr_input=} and {sr_output=} require non-integer stride"
+        assert np.isclose(stride, sr_input / sr_output), msg
+        super().__init__(fir, dtype=dtype, stride=stride)
