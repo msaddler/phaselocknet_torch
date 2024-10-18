@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --gres=gpu:1 --exclude=node[017-094,097,098],dgx001,dgx002
-#SBATCH --array=0-19
+#SBATCH --array=0-29
 #SBATCH --partition=normal --time=2-0
 #SBATCH --requeue
 
@@ -34,6 +34,17 @@ declare -a list_dir_model=(
     "models/sound_localization/simplified_IHC3000/arch08"
     "models/sound_localization/simplified_IHC3000/arch09"
     "models/sound_localization/simplified_IHC3000/arch10"
+
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0000"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0001"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0002"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0004"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0006"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0007"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0008"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0009"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0016"
+    "models/spkr_word_recognition/simplified_IHC3000/arch0_0017"
 )
 dir_model="${list_dir_model[$job_idx]}"
 echo $HOSTNAME $job_idx $dir_model
@@ -73,6 +84,7 @@ then
 else
     declare -a list_tag_expt=(
         "human_experiment_v00_foreground60dbspl"
+        "human_experiment_v00_inharmonic_foreground60dbspl"
         "speech_in_synthetic_textures"
         "pitch_altered_v00"
         "hopkins_moore_2009"
