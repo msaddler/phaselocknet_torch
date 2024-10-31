@@ -1,6 +1,6 @@
 ## phaselocknet_torch
 
-Minimal PyTorch implementation of the models from "Models optimized for real-world tasks reveal the necessity of precise temporal coding in hearing" by Mark R. Saddler and Josh H. McDermott (2024).
+Minimal PyTorch implementation of the models from ["Models optimized for real-world tasks reveal the task-dependent necessity of precise temporal coding in hearing"](https://doi.org/10.1101/2024.04.21.590435) by Mark R. Saddler and Josh H. McDermott (2024). The primary repository that accompanies this work ([phaselocknet](https://github.com/msaddler/phaselocknet)) implements the models in Tensorflow.
 
 ## Dependencies
 
@@ -18,8 +18,12 @@ The [`DEMO.ipynb`](DEMO.ipynb) notebook shows how to load and run our Tensorflow
 - [`perceptual_model.py`](perceptual_model.py): PyTorch implementation of deep neural network model
 - [`util.py`](util.py)): Helper functions (e.g., for loading Tensorflow checkpoint weights into a PyTorch model obect)
 
+Code to evaluate the PyTorch models at scale is provided in:
+- [`phaselocknet_evaluate.py`](phaselocknet_evaluate.py): Python script to run model and write outputs to files
+- [`phaselocknet_evaluate_job.sh`](phaselocknet_evaluate_job.sh): SLURM / bash script to evaluate model on stimuli from all experiments
+
 ## Contact
 
-Note that all results in the manuscript were generated using the Tensorflow implementation of these models (https://github.com/msaddler/phaselocknet) and the Tensorflow and PyTorch implementations are not guaranteed to produce identical behavior. Preliminary checks indicate that when stochastic model elements (auditory nerve spike sampling and random excerpting of auditory nerve representations) are removed, the two implementations produce softmax output distributions within numerical precision limits of one another. Please let the authors know if you find any more discrepant behavior.
+Note that all results in the manuscript were generated using the Tensorflow implementation of these models (https://github.com/msaddler/phaselocknet) and the Tensorflow and PyTorch implementations are not guaranteed to produce identical behavior. Preliminary checks indicate that when stochastic model elements (auditory nerve spike sampling and random excerpting of auditory nerve representations) are removed, the two implementations produce softmax output distributions within numerical precision limits of one another. Please let the authors know if you find any discrepant behavior.
 
 Mark R. Saddler (msaddler@mit.edu / marksa@dtu.dk)

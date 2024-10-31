@@ -1,7 +1,11 @@
 h5py==3.10.0
-numpy==2.1.1
+matplotlib==3.8.3
+numpy==2.1.2
+pandas==2.2.3
 scipy==1.14.1
 tensorflow==2.15.0.post1
 tensorflow_cpu==2.15.0.post1
 torch==2.2.1+cu118
+torchaudio==2.2.1+cu118
 torchvision==0.17.1+cu118
+tqdm==4.66.2
