@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --gres=gpu:1 --exclude=node[017-094,097,098],dgx001,dgx002
-#SBATCH --array=0-2
+#SBATCH --array=0-29
 #SBATCH --partition=normal --time=2-0
 #SBATCH --requeue
 
@@ -14,10 +14,6 @@ job_idx=$(($SLURM_ARRAY_TASK_ID + $offset))
 batch_size=32
 
 declare -a list_dir_model=(
-    "models/sound_localization/exploration/multitask_arch0_0000_grouped"
-    "models/sound_localization/exploration/multitask_arch0_0000_ungrouped"
-    "models/sound_localization/exploration/multitask_arch_test"
-
     "models/sound_localization/simplified_IHC3000_delayed_integration/arch01"
     "models/sound_localization/simplified_IHC3000_delayed_integration/arch02"
     "models/sound_localization/simplified_IHC3000_delayed_integration/arch03"
