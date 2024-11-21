@@ -6,7 +6,7 @@ Minimal and in-progress PyTorch implementation of the models from ["Models optim
 
 This is a repository of Python (3.11.7) code. A complete list of Python dependencies is contained in [`requirements.txt`](requirements.txt). The models were developed in TensorFlow (`tensorflow-2.13.0`) on machines running CentOS Linux 7 with NVidia A100 GPUs. Here, we provide minimal code to load and run the models in PyTorch (`torch-2.2.1`).
 
-## Model Weights
+## Model weights
 
 Trained weights for each model configuration are too large to include here, but can be downloaded from our [Google Drive](https://drive.google.com/drive/folders/1YgC7x6Ot84XZInlSyHK-9NQ0jhhGUS2z?usp=share_link). Each model should have its own directory, containing `config.json` (cochlear model parameters and optimization hyperparameters), `arch.json` (artificial neural network architecture), and `ckpt_BEST` (TensorFlow checkpoint file with trained weights). Weights are provided as TensorFlow checkpoint files because models were trained in TensorFlow. [Here](util.py), we provide a function to load trained weights from the TensorFlow checkpoint files into equivalent PyTorch model objects.
 
