@@ -81,6 +81,19 @@ then
         -n 8 \
         -wp 1
     done
+
+    regex_eval="/om2/user/msaddler/phaselocknet/stimuli/sound_localization/optimization/valid/stim*.hdf5"
+    fn_eval_output="eval_phaselocknet_localization_valid.csv"
+    echo "|__ tag_expt=$tag_expt"
+    echo "|__ regex_eval=$regex_eval"
+    echo "|__ fn_eval_output=$fn_eval_output"
+    python -u phaselocknet_evaluate.py \
+    -m "$dir_model" \
+    -e "$regex_eval" \
+    -fe "$fn_eval_output" \
+    -b $batch_size \
+    -n 8 \
+    -wp 0
 else
     declare -a list_tag_expt=(
         "human_experiment_v00_foreground60dbspl"
